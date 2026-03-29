@@ -42,5 +42,14 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons)
     implementation(libs.androidx.navigation.compose)
+    // CameraX
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.camerax.video)
+    // Accompanist permissions
+    implementation(libs.accompanist.permissions)
+    implementation("com.google.guava:guava:32.1.3-android")
     debugImplementation(libs.androidx.ui.tooling)
 }

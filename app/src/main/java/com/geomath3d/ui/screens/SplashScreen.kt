@@ -3,7 +3,6 @@ package com.geomath3d.ui.screens
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,7 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.geomath3d.ui.theme.Accent
 import com.geomath3d.ui.theme.AccentGreen
 import com.geomath3d.data.ShapeType
-import com.geomath3d.ui.components.Shape3DCanvas2
+import com.geomath3d.ui.components.Shape3DCanvas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -77,7 +76,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 modifier = Modifier.height(120.dp),
             ) {
                 Box(modifier = Modifier.size(80.dp).alpha(shape1Alpha.value)) {
-                    Shape3DCanvas2(
+                    Shape3DCanvas(
                         shapeType  = ShapeType.SPHERE,
                         primaryColor   = Accent,
                         secondaryColor = Color(0xFF3D35B0),
@@ -85,7 +84,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                     )
                 }
                 Box(modifier = Modifier.size(100.dp).alpha(shape2Alpha.value)) {
-                    Shape3DCanvas2(
+                    Shape3DCanvas(
                         shapeType  = ShapeType.CUBE,
                         primaryColor   = AccentGreen,
                         secondaryColor = Color(0xFF007A60),
@@ -93,7 +92,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                     )
                 }
                 Box(modifier = Modifier.size(80.dp).alpha(shape3Alpha.value)) {
-                    Shape3DCanvas2(
+                    Shape3DCanvas(
                         shapeType  = ShapeType.CONE,
                         primaryColor   = Color(0xFFFF9F43),
                         secondaryColor = Color(0xFF9A5500),

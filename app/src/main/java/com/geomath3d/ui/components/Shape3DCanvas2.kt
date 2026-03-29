@@ -1,5 +1,3 @@
-@file:JvmName("Shape3DCanvasKt")
-
 package com.geomath3d.ui.components
 
 import androidx.compose.animation.core.*
@@ -29,7 +27,7 @@ private fun project(x: Float, y: Float, z: Float, angleX: Float, angleY: Float):
 }
 
 @Composable
-fun Shape3DCanvas2(
+fun Shape3DCanvas(
     shapeType: ShapeType,
     primaryColor: Color,
     secondaryColor: Color,
@@ -116,158 +114,160 @@ fun Shape3DCanvas2(
 
             ShapeType.CYLINDER -> {
                 val r = 1f; val h = 1.2f
-                val steps = 72  // yuqori aniqlik
+                val steps = 120
 
-                // 3D nuqtalarni oldindan hisoblash (loyihalashdan oldin)
-                val bottomRaw = (0..steps).map { i ->
+                // Har bir nuqtaning 3D z-qiymatini hisoblash (aylanishdan keyin)
+                // z > 0 => orqa, z < 0 => old
+                data class RingPoint(val angle: Float, val projectedZ: Float, val top: Offset, val bot: Offset)
+
+                val ring = (0..steps).map { i ->
                     val a = i * 2 * PI.toFloat() / steps
-                    Triple(r * cos(a), h, r * sin(a))
-                }
-                val topRaw = (0..steps).map { i ->
-                    val a = i * 2 * PI.toFloat() / steps
-                    Triple(r * cos(a), -h, r * sin(a))
+                    val wx = r * cos(a)
+                    val wz = r * sin(a)
+                    // Faqat Y o'qi atrofida aylantirilgandan keyin z ni hisoblash
+                    val rotZ = -wx * sin(displayAngle) + wz * cos(displayAngle)
+                    RingPoint(
+                        angle = a,
+                        projectedZ = rotZ,
+                        top = pt(wx, -h, wz),
+                        bot = pt(wx,  h, wz),
+                    )
                 }
 
-                // Har bir segment uchun z-depth hisoblash (painter's algorithm)
-                // Orqa tomonni avval, old tomonni keyin chizish
-                val angleYMod = displayAngle % (2 * PI.toFloat())
+                // z > 0 = orqa (kamera dan uzoq), z < 0 = old (kameraga yaqin)
+                val backRing  = ring.filter { it.projectedZ >= 0 }
+                val frontRing = ring.filter { it.projectedZ <  0 }
 
-                // Orqa yuzani chizish (z > 0 bo'lgan yarimdoira)
-                val backSidePath = Path().apply {
-                    val startI = steps / 2
-                    val endI = steps
-                    moveTo(pt(topRaw[startI].first, topRaw[startI].second, topRaw[startI].third).x,
-                           pt(topRaw[startI].first, topRaw[startI].second, topRaw[startI].third).y)
-                    for (i in startI..endI) {
-                        val tp = pt(topRaw[i].first, topRaw[i].second, topRaw[i].third)
-                        lineTo(tp.x, tp.y)
+                // ── 1. Orqa yon yuz ──
+                if (backRing.size >= 2) {
+                    val path = Path().apply {
+                        moveTo(backRing.first().top.x, backRing.first().top.y)
+                        backRing.forEach { lineTo(it.top.x, it.top.y) }
+                        backRing.reversed().forEach { lineTo(it.bot.x, it.bot.y) }
+                        close()
                     }
-                    for (i in endI downTo startI) {
-                        val bp = pt(bottomRaw[i].first, bottomRaw[i].second, bottomRaw[i].third)
-                        lineTo(bp.x, bp.y)
-                    }
+                    drawPath(path, Brush.linearGradient(
+                        listOf(secondaryColor.copy(.38f), secondaryColor.copy(.18f))
+                    ))
+                }
+
+                // ── 2. Pastki disk ──
+                val botPath = Path().apply {
+                    moveTo(ring.first().bot.x, ring.first().bot.y)
+                    ring.forEach { lineTo(it.bot.x, it.bot.y) }
                     close()
                 }
-                drawPath(backSidePath, Brush.linearGradient(
-                    listOf(secondaryColor.copy(.45f), secondaryColor.copy(.25f))
-                ))
-
-                // Pastki disk (bottom cap) — orqa qismini chizish
-                val bottomPath = Path().apply {
-                    val b0 = pt(bottomRaw[0].first, bottomRaw[0].second, bottomRaw[0].third)
-                    moveTo(b0.x, b0.y)
-                    bottomRaw.forEach { (x, y, z) ->
-                        val bp = pt(x, y, z)
-                        lineTo(bp.x, bp.y)
-                    }
-                    close()
-                }
-                drawPath(bottomPath, Brush.linearGradient(
-                    listOf(secondaryColor.copy(.6f), secondaryColor.copy(.35f))
+                drawPath(botPath, Brush.linearGradient(
+                    listOf(secondaryColor.copy(.65f), secondaryColor.copy(.38f))
                 ))
                 drawPath(Path().apply {
-                    val b0 = pt(bottomRaw[0].first, bottomRaw[0].second, bottomRaw[0].third)
-                    moveTo(b0.x, b0.y)
-                    bottomRaw.forEach { (x, y, z) -> lineTo(pt(x, y, z).x, pt(x, y, z).y) }
+                    moveTo(ring.first().bot.x, ring.first().bot.y)
+                    ring.forEach { lineTo(it.bot.x, it.bot.y) }
                 }, color = darkEdge, style = Stroke(1.5f))
 
-                // Old yuzani chizish (z < 0 bo'lgan yarimdoira) — ustiga
-                val frontSidePath = Path().apply {
-                    val t0 = pt(topRaw[0].first, topRaw[0].second, topRaw[0].third)
-                    moveTo(t0.x, t0.y)
-                    for (i in 0..steps / 2) {
-                        val tp = pt(topRaw[i].first, topRaw[i].second, topRaw[i].third)
-                        lineTo(tp.x, tp.y)
+                // ── 3. Old yon yuz ──
+                if (frontRing.size >= 2) {
+                    val path = Path().apply {
+                        moveTo(frontRing.first().top.x, frontRing.first().top.y)
+                        frontRing.forEach { lineTo(it.top.x, it.top.y) }
+                        frontRing.reversed().forEach { lineTo(it.bot.x, it.bot.y) }
+                        close()
                     }
-                    for (i in steps / 2 downTo 0) {
-                        val bp = pt(bottomRaw[i].first, bottomRaw[i].second, bottomRaw[i].third)
-                        lineTo(bp.x, bp.y)
-                    }
-                    close()
+                    drawPath(path, fill)
                 }
-                drawPath(frontSidePath, fill)
 
-                // Yuqori disk (top cap) — eng ustida
+                // ── 4. Yuqori disk (eng ustida) ──
                 val topPath = Path().apply {
-                    val t0 = pt(topRaw[0].first, topRaw[0].second, topRaw[0].third)
-                    moveTo(t0.x, t0.y)
-                    topRaw.forEach { (x, y, z) ->
-                        val tp = pt(x, y, z)
-                        lineTo(tp.x, tp.y)
-                    }
+                    moveTo(ring.first().top.x, ring.first().top.y)
+                    ring.forEach { lineTo(it.top.x, it.top.y) }
                     close()
                 }
                 drawPath(topPath, Brush.linearGradient(
-                    listOf(primaryColor.copy(.92f), primaryColor.copy(.65f))
+                    listOf(primaryColor.copy(.95f), primaryColor.copy(.65f))
                 ))
-                // Top rim
+                // Top rim chiziq
                 drawPath(Path().apply {
-                    val t0 = pt(topRaw[0].first, topRaw[0].second, topRaw[0].third)
-                    moveTo(t0.x, t0.y)
-                    topRaw.forEach { (x, y, z) -> lineTo(pt(x, y, z).x, pt(x, y, z).y) }
+                    moveTo(ring.first().top.x, ring.first().top.y)
+                    ring.forEach { lineTo(it.top.x, it.top.y) }
                 }, color = edgeColor, style = Stroke(2f))
 
-                // Yon chiziqlar (silinder qirralari)
-                val leftI  = steps / 4
-                val rightI = steps * 3 / 4
-                drawLine(edgeColor,
-                    pt(topRaw[leftI].first,  topRaw[leftI].second,  topRaw[leftI].third),
-                    pt(bottomRaw[leftI].first, bottomRaw[leftI].second, bottomRaw[leftI].third),
-                    strokeWidth = 1.5f)
-                drawLine(edgeColor,
-                    pt(topRaw[rightI].first,  topRaw[rightI].second,  topRaw[rightI].third),
-                    pt(bottomRaw[rightI].first, bottomRaw[rightI].second, bottomRaw[rightI].third),
-                    strokeWidth = 1.5f)
+                // Silindirning yon qirra chiziqlari
+                val leftPt  = ring.minByOrNull {
+                    val p = project(r * cos(it.angle), 0f, r * sin(it.angle), angleX, displayAngle)
+                    p.x
+                }
+                val rightPt = ring.maxByOrNull {
+                    val p = project(r * cos(it.angle), 0f, r * sin(it.angle), angleX, displayAngle)
+                    p.x
+                }
+                leftPt?.let  { drawLine(edgeColor, it.top, it.bot, strokeWidth = 1.5f) }
+                rightPt?.let { drawLine(edgeColor, it.top, it.bot, strokeWidth = 1.5f) }
             }
 
             ShapeType.CONE -> {
                 val r = 1f; val h = 1.3f
-                val steps = 72
+                val steps = 120
 
                 val apex = pt(0f, -h, 0f)
-                val baseRaw = (0..steps).map { i ->
+
+                data class BasePoint(val angle: Float, val projectedZ: Float, val pos: Offset)
+
+                val base = (0..steps).map { i ->
                     val a = i * 2 * PI.toFloat() / steps
-                    Triple(r * cos(a), h, r * sin(a))
+                    val wx = r * cos(a)
+                    val wz = r * sin(a)
+                    val rotZ = -wx * sin(displayAngle) + wz * cos(displayAngle)
+                    BasePoint(a, rotZ, pt(wx, h, wz))
                 }
-                val basePts = baseRaw.map { (x, y, z) -> pt(x, y, z) }
 
-                // 1) Orqa konus yuzasi
-                val backConePath = Path().apply {
-                    moveTo(apex.x, apex.y)
-                    for (i in steps / 2..steps) lineTo(basePts[i].x, basePts[i].y)
-                    close()
+                val backBase  = base.filter { it.projectedZ >= 0 }
+                val frontBase = base.filter { it.projectedZ <  0 }
+
+                // ── 1. Orqa konus yuzasi ──
+                if (backBase.size >= 2) {
+                    val path = Path().apply {
+                        moveTo(apex.x, apex.y)
+                        backBase.forEach { lineTo(it.pos.x, it.pos.y) }
+                        close()
+                    }
+                    drawPath(path, Brush.linearGradient(
+                        listOf(secondaryColor.copy(.32f), secondaryColor.copy(.15f))
+                    ))
                 }
-                drawPath(backConePath, Brush.linearGradient(
-                    listOf(secondaryColor.copy(.35f), secondaryColor.copy(.2f))
-                ))
 
-                // 2) Asos disk (base cap)
+                // ── 2. Asos disk ──
                 val baseCapPath = Path().apply {
-                    moveTo(basePts[0].x, basePts[0].y)
-                    basePts.forEach { lineTo(it.x, it.y) }
+                    moveTo(base.first().pos.x, base.first().pos.y)
+                    base.forEach { lineTo(it.pos.x, it.pos.y) }
                     close()
                 }
                 drawPath(baseCapPath, Brush.linearGradient(
-                    listOf(secondaryColor.copy(.65f), secondaryColor.copy(.4f))
+                    listOf(secondaryColor.copy(.68f), secondaryColor.copy(.42f))
                 ))
                 drawPath(Path().apply {
-                    moveTo(basePts[0].x, basePts[0].y)
-                    basePts.forEach { lineTo(it.x, it.y) }
-                }, edgeColor, style = Stroke(1.5f))
+                    moveTo(base.first().pos.x, base.first().pos.y)
+                    base.forEach { lineTo(it.pos.x, it.pos.y) }
+                }, color = edgeColor, style = Stroke(1.5f))
 
-                // 3) Old konus yuzasi — ustiga
-                val frontConePath = Path().apply {
-                    moveTo(apex.x, apex.y)
-                    for (i in 0..steps / 2) lineTo(basePts[i].x, basePts[i].y)
-                    close()
+                // ── 3. Old konus yuzasi ──
+                if (frontBase.size >= 2) {
+                    val path = Path().apply {
+                        moveTo(apex.x, apex.y)
+                        frontBase.forEach { lineTo(it.pos.x, it.pos.y) }
+                        close()
+                    }
+                    drawPath(path, fill)
                 }
-                drawPath(frontConePath, fill)
 
-                // Qirralar
-                drawLine(edgeColor, apex, basePts[0],          strokeWidth = 2f)
-                drawLine(edgeColor, apex, basePts[steps / 2],  strokeWidth = 2f)
-                drawLine(edgeColor.copy(.5f), apex, basePts[steps / 4],      strokeWidth = 1f)
-                drawLine(edgeColor.copy(.5f), apex, basePts[steps * 3 / 4],  strokeWidth = 1f)
+                // Qirralar — eng chap va eng o'ng nuqtalarni topish
+                val leftPt  = base.minByOrNull {
+                    project(r * cos(it.angle), h, r * sin(it.angle), angleX, displayAngle).x
+                }
+                val rightPt = base.maxByOrNull {
+                    project(r * cos(it.angle), h, r * sin(it.angle), angleX, displayAngle).x
+                }
+                leftPt?.let  { drawLine(edgeColor, apex, it.pos, strokeWidth = 2f) }
+                rightPt?.let { drawLine(edgeColor, apex, it.pos, strokeWidth = 2f) }
             }
 
             ShapeType.CUBE -> {
